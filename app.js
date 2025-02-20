@@ -1,6 +1,7 @@
 import express from "express"
 import cors from "cors";
 import authRouter from "./src/routes/auth.route.js"
+import voiceRouter from "./src/routes/voice.route.js"
 import { ApiError } from "./src/utils/apiError.js";
 const app = express()
 
@@ -18,6 +19,7 @@ app.use(express.json())
 
 // Routers
 app.use('/api/v1/auth', authRouter)
+app.use("/api/v1/voice", voiceRouter)
 
 // health route
 app.get('/health', (req, res) => {
