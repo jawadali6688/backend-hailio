@@ -2,13 +2,15 @@ import express from "express"
 import cors from "cors";
 import authRouter from "./src/routes/auth.route.js"
 import voiceRouter from "./src/routes/voice.route.js"
+import adminRouter from "./src/routes/admin.route.js"
 import { ApiError } from "./src/utils/apiError.js";
+import axios from "axios";
 const app = express()
 
 
 
 app.use(cors({
-    origin: ["http://localhost:5173", "https://hailio-ai.vercel.app"],
+    origin: ["http://localhost:5173", "http://localhost:5174",  "https://hailio-ai.vercel.app"],
     credentials: true,
   }));
 
@@ -20,6 +22,7 @@ app.use(express.json())
 // Routers
 app.use('/api/v1/auth', authRouter)
 app.use("/api/v1/voice", voiceRouter)
+app.use("/api/v1/admin", adminRouter)
 
 // health route
 app.get('/health', (req, res) => {
@@ -42,6 +45,8 @@ app.use((err, req, res, next) => {
     message: "Internal Server Error",
   });
 });
+
+
 
 
 export { app }

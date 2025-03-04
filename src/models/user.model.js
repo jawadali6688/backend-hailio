@@ -7,7 +7,7 @@ const userSchema = new Schema(
         type: String,
         enum: ["user", "test", "admin"],
         required: true,
-        default: "user"
+        default: "test"
       },
       fullName: {
         type: String,
@@ -41,9 +41,31 @@ const userSchema = new Schema(
       },
       voiceAccess: {
         type: Boolean,
-        default: false,
+        default: true,
         required: true
       },
+      clonedVoices: {
+        type: Array
+      },
+      generatedVoices: {
+        type: Array
+      },
+      oneTimeCharacters: {
+        type: Number,
+        default: 10000
+      },
+      allowedClones: {
+        type: Number,
+        default: 2
+      },
+      voicesRequest: {
+        type: Number,
+        default: 0
+      },
+      allowedVoicesRequest: {
+        type: Number,
+        default: 2
+      }
      
     },
     { timestamps: true }

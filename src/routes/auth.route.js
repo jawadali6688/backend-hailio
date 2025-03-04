@@ -3,7 +3,7 @@ import { Router } from "express";
 
 
 import { verifyJWT } from "../middlewares/auth.middleware.js";
-import { changeCurrentPassword, forgotPassword, loginUser, loginWithToken, logoOutUser, refreshAccessToken, registerUser, resendVerificationLink, resetPassword, verificationOfEmail } from "../controllers/auth.controller.js";
+import { changeCurrentPassword, forgotPassword, getCurrentUserClonedVoices, loginUser, loginWithToken, logoOutUser, refreshAccessToken, registerUser, resendVerificationLink, resetPassword, verificationOfEmail } from "../controllers/auth.controller.js";
 
 const router = Router();
 
@@ -16,6 +16,7 @@ router.route("/login").post(loginUser);
 
 // Secured Routes
 router.route("/login-with-token").post(verifyJWT, loginWithToken);
+router.route("/get_user_cloned").post(getCurrentUserClonedVoices);
 
 router.route("/logout").post(verifyJWT, logoOutUser);
 

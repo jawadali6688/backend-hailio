@@ -74,6 +74,7 @@ const registerUser = asyncHandler(async (req, resp) => {
 // login user
 const loginUser = asyncHandler(async (req, resp) => {
   const { email, password } = req.body;
+  console.log(email)
   try {
     if (!email) {
       throw new ApiError(405, "Email cannot be empty!", null);
@@ -133,6 +134,27 @@ const loginWithToken = asyncHandler(async (req, resp) => {
     .status(200)
     .json(new ApiResponse(200, { user }, "User fetched Successfully"));
 });
+
+const getCurrentUserClonedVoices = asyncHandler (async (req, resp) => {
+  const {userId} = req.body
+  try {
+    if (!userId) {
+      throw new ApiError(401, "Invalid request", null)
+    }
+
+    const dbUser = await User.findById({_id: userId})
+
+    if (!dbUser) {
+      throw new ApiError(401, "User not exist", null)
+    }
+    return resp.status(201).json(
+      new ApiResponse(201,  dbUser, "User cloned voices fetched successfully!")
+    )
+  } catch (error) {
+    console.log(error)
+    throw new ApiError(503, error.message, error)
+  }
+})
 
 // logout user
 const logoOutUser = asyncHandler(async (req, resp) => {
@@ -372,5 +394,6 @@ export {
   changeCurrentPassword,
   refreshAccessToken,
   verificationOfEmail,
-  resendVerificationLink
+  resendVerificationLink,
+  getCurrentUserClonedVoices
 };

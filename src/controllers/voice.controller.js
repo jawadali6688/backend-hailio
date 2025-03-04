@@ -5,7 +5,9 @@ import axios from "axios";
 import FormData from "form-data";
 import fs from "fs"
 import { uploadOnCloudinary } from "../utils/cloundinary.js";
-
+import { User } from "../models/user.model.js";
+import * as base64 from 'base64-arraybuffer';
+import { ZyphraClient } from "@zyphra/client";
 // Helper function to check cloning status
 const checkCloningStatus = async (voiceId) => {
     const maxRetries = 10;
@@ -44,88 +46,151 @@ const checkCloningStatus = async (voiceId) => {
 const voiceCloning = asyncHandler(async (req, res) => {
     try {
         console.log("📥 Received request:", req.body);
-        const { fileUrl, voiceName } = req.body;
+        const { fileUrl, voiceName, userId } = req.body;
 
         if (!fileUrl || !voiceName) {
-            return res.status(400).json({ error: "❌ Missing required parameters (fileUrl, voiceName)" });
+            return res.status(400).json({ error: "Missing required parameters (fileUrl, voiceName)" });
         }
-
-        // ✅ Prepare FormData (multipart/form-data)
-        const formData = new FormData();
-        formData.append("name", voiceName); 
-        formData.append("files", fileUrl);  // ✅ Pass file URL correctly
-
-        // ✅ Step 1: Start voice cloning
-        const cloneResponse = await axios.post(
-            "https://api.elevenlabs.io/v1/voices/add",
-            formData,
-            {
-                headers: {
-                    "xi-api-key": process.env.ELEVEN_LABS_API_KEY,  // ✅ Correct API key format
-                    ...formData.getHeaders(),
-                },
-            }
-        );
-
-        if (!cloneResponse.data || !cloneResponse.data.voice_id) {
-            return res.status(500).json({ error: "❌ Failed to start voice cloning." });
+        const user = await User.findById(userId).select("clonedVoices");
+        if (user.clonedVoices.length >= 4) {
+            throw new ApiError(401, "Not allowed, you are reached to maximum voice clones limit.", null)
         }
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { $push: { clonedVoices: { clonedName: voiceName, clonedUrl: fileUrl } } },
+            { new: true }
+        ).select("-password -refreshToken")
 
-        const clonedVoiceId = cloneResponse.data.voice_id;
+        console.log(updatedUser)
 
-        // ✅ Step 2: Wait until cloning is completed
-        console.log("⏳ Waiting for voice cloning to complete...");
-        const finalVoiceId = await checkCloningStatus(clonedVoiceId);
-
-        // ✅ Step 3: Return the final voice ID
-        res.json({ finalVoiceId, message: "✅ Voice cloning completed successfully!" });
+        return res.status(201).json(
+            new ApiResponse(201, updatedUser, "Voice Cloned Successfully!")
+        )
     } catch (error) {
-        console.error("❌ Voice Cloning Error:", error.response?.data || error.message);
-        res.status(500).json({ error: error.message || "⚠️ Internal server error" });
+        console.error("❌ Voice Cloning Error:", error.message, error);
+       throw new ApiError(503, error.message, error)
     }
 });
-
 
 const textToSpeech = asyncHandler(async (req, resp) => {
     console.log(req.body);
-    const { text, speed, voice_id } = req.body;
+    const { text, speed, audioUrl, userId } = req.body;
+    const apiKey = process.env.VOICE_KEY;
 
     try {
-        const headers = {
-            'Authorization': `Bearer ${process.env.PLAYDIALOG_API_KEY}`,
-            'Content-Type': 'application/json',
-            'X-USER-ID': process.env.PLAYDIALOG_USER_ID
-        };
-
-        if (!text) {
-            throw new ApiError(403, "Text cannot be empty!", null);
+        // Fetch audio from the provided URL
+        const user = await User.findById(userId)
+        if (!user?.voiceAccess) {
+            throw new ApiError(501, "You are not allowed for voice creating, try contacting with admin", null)
         }
+        console.log(user.generatedVoices)
+        
+        if (user.generatedVoices?.length >= 2) {
+            throw new ApiError(501, "You have to reached to maximum created, for more contact to admin", null)
+        }
+        const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+        const audioBase64 = base64.encode(response.data);
 
-        const jsonData = {
-            model: 'PlayDialog',
-            text: text,
-            voice: voice_id,
-            outputFormat: 'wav',
-            speed: speed,
-        };
+        // Initialize Zyphra client
+        const client = new ZyphraClient({ apiKey });
 
-        const response = await axios.post('https://api.play.ai/api/v1/tts/stream', jsonData, { 
-            headers, 
-            responseType: 'arraybuffer' // Ensure binary data is received
+        // Generate voice
+        const audioData = await client.audio.speech.create({
+            text,
+            speaker_audio: audioBase64,
+            language_iso_code: 'en-us',
+            mime_type: 'audio/mpeg',
+            speaking_rate: 15,
+            emotion: {
+                happiness: 0.6,
+        sadness: 0.1,
+        disgust: 0.05,
+        fear: 0.05,
+        surprise: 0.2,
+        other: 0.2,
+        neutral: 0.8,
+        anger: 0.1
+            },
+            pitch_std: 10,
+            fmax: 6000,
+            vqscore: 0.5,
         });
 
-        // Set the correct Content-Type
-        resp.setHeader('Content-Type', 'audio/wav');
-        resp.setHeader('Content-Length', response.data.byteLength);
+        
 
-        return resp.status(200).send(response.data); // Send raw audio data
+
+        // Convert Blob to ArrayBuffer, then to Buffer
+        const arrayBuffer = await audioData.arrayBuffer(); // Converts Blob to ArrayBuffer
+        const buffer = Buffer.from(arrayBuffer); // Converts ArrayBuffer to Buffer
+
+        // Set response headers
+        const fileName = 'output.mp3';
+        resp.set({
+            'Content-Disposition': `attachment; filename="${fileName}"`,
+            'Content-Type': 'audio/mpeg',
+        });
+
+        const newVoice = {
+            voiceText: text?.slice(0, 20), 
+            audio: buffer.toString('base64') // Store as base64 to avoid binary issues
+        };
+
+        user.generatedVoices.push(newVoice)
+        await user.save();
+
+        // Send the audio data as a binary stream
+        resp.status(201).send(buffer);
 
     } catch (error) {
-        console.log(error)
-        console.log(error.message);
-        throw new ApiError(503, error.message, error);
+        console.error('Error generating voice:', error.message);
+        throw new ApiError(503, error.message, error)
     }
 });
+
+// const textToSpeech = asyncHandler(async (req, resp) => {
+//     console.log(req.body);
+//     const { text, speed, audioUrl } = req.body;
+//     const apiKey = "zsk-3b77ee1c776147c116bb858cb39b1ced044599a635b0f7cea5080a5708644b82"
+
+//     try {
+//         // Fetch audio from the provided URL
+//         const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+//         const audioBase64 = base64.encode(response.data);
+
+//         // Initialize Zyphra client
+//         const client = new ZyphraClient({ apiKey });
+
+//         // Generate voice
+//         const audioData = await client.audio.speech.create({
+//             text,
+//             speaker_audio: audioBase64,
+//             language_iso_code: 'en-us',
+//             mime_type: `audio/mp3`,
+//             speaking_rate: 15,
+           
+//         });
+
+//         // Send back the audio data as a file
+//         const fileName = `output.mp3`;
+//         resp.set({
+//             'Content-Disposition': `attachment; filename="${fileName}"`,
+//             'Content-Type': `audio/mp3`,
+//         });
+//         console.log(audioData)
+//         return resp.status(201).json(
+//             new ApiResponse(201, audioData, "Audio generated successfully")
+//         )
+
+//     } catch (error) {
+//         console.log(error)
+//         console.error('Error generating voice:', error.message);
+//         resp.status(500).json({ error: 'Failed to generate voice' });
+//     }
+
+// });
+
+
+
 
 
 export { voiceCloning, textToSpeech };
