@@ -74,9 +74,8 @@ const voiceCloning = asyncHandler(async (req, res) => {
 
 const textToSpeech = asyncHandler(async (req, resp) => {
     console.log(req.body);
-    const { text, speed, audioUrl, userId } = req.body;
-    const apiKey = process.env.VOICE_KEY;
-
+    const { text, speed, audioUrl, userId, apiKey } = req.body;
+    
     try {
         // Fetch audio from the provided URL
         const user = await User.findById(userId)
@@ -85,7 +84,7 @@ const textToSpeech = asyncHandler(async (req, resp) => {
         }
         console.log(user.generatedVoices)
         
-        if (user.generatedVoices?.length >= 2) {
+        if (user.generatedVoices?.length >= user.allowedVoicesRequest) {
             throw new ApiError(501, "You have to reached to maximum created, for more contact to admin", null)
         }
         const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
@@ -100,7 +99,7 @@ const textToSpeech = asyncHandler(async (req, resp) => {
             speaker_audio: audioBase64,
             language_iso_code: 'en-us',
             mime_type: 'audio/mpeg',
-            speaking_rate: 15,
+            speaking_rate: 17,
             emotion: {
                 happiness: 0.6,
         sadness: 0.1,
@@ -111,9 +110,9 @@ const textToSpeech = asyncHandler(async (req, resp) => {
         neutral: 0.8,
         anger: 0.1
             },
-            pitch_std: 10,
+            pitch_std: 20,
             fmax: 6000,
-            vqscore: 0.5,
+            vqscore: 0.69,
         });
 
         

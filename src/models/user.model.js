@@ -14,7 +14,7 @@ const userSchema = new Schema(
       },
       username: {
         type: String,
-        default: "jsf_ai_"
+        default: "jsf_ai"
       },
       email: {
         type: String,
@@ -41,8 +41,11 @@ const userSchema = new Schema(
       },
       voiceAccess: {
         type: Boolean,
-        default: true,
+        default: false,
         required: true
+      },
+      apiKey: {
+        type: String
       },
       clonedVoices: {
         type: Array
